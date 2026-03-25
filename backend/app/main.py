@@ -1,5 +1,4 @@
-﻿import time
-from contextlib import asynccontextmanager
+﻿from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from . import models  # noqa: F401
 from .db import SessionLocal, engine, get_db
+from .llm import run_model_config_test
 from .parser import infer_event
 from .repository import create_event, get_model_config, list_events, seed_events, upsert_model_config
 from .schemas import (
@@ -40,7 +40,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title='AI Calendar API',
     description='MVP backend for an AI-powered memory and planning assistant.',
-    version='0.4.0',
+    version='0.5.0',
     lifespan=lifespan,
 )
 
@@ -95,19 +95,9 @@ def put_model_config(payload: ModelConfigUpdate, db: Session = Depends(get_db)) 
 
 @app.post('/api/model-config/test', response_model=ModelConfigTestResponse)
 def test_model_config(payload: ModelConfigTestRequest) -> ModelConfigTestResponse:
-    started = time.perf_counter()
-    has_base_url = payload.provider in {'ollama', 'custom'} and bool(payload.base_url.strip())
-    latency_ms = int((time.perf_counter() - started) * 1000) + 120
-
-    if payload.provider in {'ollama', 'custom'} and not has_base_url:
-        return ModelConfigTestResponse(
-            success=False,
-            latency_ms=latency_ms,
-            message='Base URL is required for ollama or custom providers.',
-        )
-
+    success, latency_ms, message = run_model_config_test(payload)
     return ModelConfigTestResponse(
-        success=True,
+        success=success,
         latency_ms=latency_ms,
-        message=f'Test request for {payload.provider}/{payload.model} passed validation in MVP mode.',
+        message=message,
     )

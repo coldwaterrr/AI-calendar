@@ -5,3 +5,4 @@ sqlalchemy==2.0.40
 alembic==1.14.1
 psycopg[binary]==3.2.6
 cryptography==42.0.8
+litellm==1.82.1
