@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 type EventItem = {
   id: string;
@@ -13,7 +13,27 @@ type EventItem = {
   confidence: number;
 };
 
+type Provider = "openai" | "anthropic" | "gemini" | "ollama" | "custom";
+
+type ModelConfig = {
+  provider: Provider;
+  model: string;
+  base_url: string;
+  api_key_masked: string;
+  is_active: boolean;
+  has_api_key: boolean;
+  updated_at: string;
+};
+
+type TestResult = {
+  success: boolean;
+  latency_ms: number;
+  message: string;
+};
+
 const API_BASE = "http://127.0.0.1:8000";
+
+const providerOptions: Provider[] = ["openai", "anthropic", "gemini", "ollama", "custom"];
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -28,12 +48,43 @@ export function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [input, setInput] = useState("下周二早上 9 点提醒我开组会");
   const [status, setStatus] = useState("等待输入");
+  const [configStatus, setConfigStatus] = useState("尚未配置模型");
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [configForm, setConfigForm] = useState({
+    provider: "openai" as Provider,
+    model: "gpt-4o-mini",
+    base_url: "",
+    api_key: "",
+    is_active: true,
+  });
+  const [savedConfig, setSavedConfig] = useState<ModelConfig | null>(null);
 
   useEffect(() => {
     void fetch(`${API_BASE}/api/events`)
       .then((response) => response.json())
       .then((data: EventItem[]) => setEvents(data))
       .catch(() => setStatus("后端尚未启动，当前展示为开发占位状态"));
+
+    void fetch(`${API_BASE}/api/model-config`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("missing");
+        }
+        return response.json();
+      })
+      .then((data: ModelConfig) => {
+        setSavedConfig(data);
+        setConfigStatus(`当前已启用 ${data.provider} / ${data.model}`);
+        setConfigForm((current) => ({
+          ...current,
+          provider: data.provider,
+          model: data.model,
+          base_url: data.base_url,
+          api_key: "",
+          is_active: data.is_active,
+        }));
+      })
+      .catch(() => setConfigStatus("尚未配置模型，可在右侧设置面板中保存"));
   }, []);
 
   async function handleSubmit() {
@@ -51,6 +102,43 @@ export function App() {
       setStatus(data.message);
     } catch {
       setStatus("未连接到后端，已保留输入内容");
+    }
+  }
+
+  async function handleSaveConfig() {
+    setConfigStatus("保存中...");
+    try {
+      const response = await fetch(`${API_BASE}/api/model-config`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(configForm),
+      });
+      const data = (await response.json()) as ModelConfig;
+      setSavedConfig(data);
+      setConfigStatus(`已保存 ${data.provider} / ${data.model}`);
+      setConfigForm((current) => ({ ...current, api_key: "" }));
+    } catch {
+      setConfigStatus("保存失败，请确认后端已启动");
+    }
+  }
+
+  async function handleTestConfig() {
+    setConfigStatus("测试连接中...");
+    try {
+      const response = await fetch(`${API_BASE}/api/model-config/test`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(configForm),
+      });
+      const data = (await response.json()) as TestResult;
+      setTestResult(data);
+      setConfigStatus(data.message);
+    } catch {
+      setConfigStatus("测试失败，请确认后端已启动");
     }
   }
 
@@ -83,7 +171,7 @@ export function App() {
           </div>
         </section>
 
-        <section className="content-grid">
+        <section className="content-grid expanded-grid">
           <article className="glass-card panel">
             <div className="panel-header">
               <h2>对话流</h2>
@@ -137,6 +225,101 @@ export function App() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </article>
+
+          <article className="glass-card panel settings-panel">
+            <div className="panel-header">
+              <h2>BYOK 设置</h2>
+              <p>配置 OpenAI、Gemini、Anthropic、Ollama 或自定义接口</p>
+            </div>
+
+            <div className="settings-stack">
+              <label>
+                <span>Provider</span>
+                <select
+                  value={configForm.provider}
+                  onChange={(event) =>
+                    setConfigForm((current) => ({
+                      ...current,
+                      provider: event.target.value as Provider,
+                    }))
+                  }
+                >
+                  {providerOptions.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Model</span>
+                <input
+                  value={configForm.model}
+                  onChange={(event) =>
+                    setConfigForm((current) => ({ ...current, model: event.target.value }))
+                  }
+                  placeholder="gpt-4o-mini"
+                />
+              </label>
+
+              <label>
+                <span>Base URL</span>
+                <input
+                  value={configForm.base_url}
+                  onChange={(event) =>
+                    setConfigForm((current) => ({ ...current, base_url: event.target.value }))
+                  }
+                  placeholder="https://api.openai.com/v1"
+                />
+              </label>
+
+              <label>
+                <span>API Key</span>
+                <input
+                  type="password"
+                  value={configForm.api_key}
+                  onChange={(event) =>
+                    setConfigForm((current) => ({ ...current, api_key: event.target.value }))
+                  }
+                  placeholder="sk-..."
+                />
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={configForm.is_active}
+                  onChange={(event) =>
+                    setConfigForm((current) => ({ ...current, is_active: event.target.checked }))
+                  }
+                />
+                <span>设为当前启用模型</span>
+              </label>
+
+              <div className="settings-actions">
+                <button onClick={handleTestConfig} className="secondary-button">
+                  测试连接
+                </button>
+                <button onClick={handleSaveConfig}>保存配置</button>
+              </div>
+
+              <div className="status-block">
+                <strong>{configStatus}</strong>
+                {savedConfig ? (
+                  <p>
+                    已保存密钥：{savedConfig.api_key_masked}，最近更新时间：
+                    {formatTime(savedConfig.updated_at)}
+                  </p>
+                ) : null}
+                {testResult ? (
+                  <p>
+                    测试结果：{testResult.success ? "成功" : "失败"}，耗时 {testResult.latency_ms} ms
+                  </p>
+                ) : null}
               </div>
             </div>
           </article>

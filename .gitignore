@@ -9,7 +9,7 @@ dist/
 
 .env
 .env.*
-
+backend/.secrets/
 backend/ai_calendar.db
 
 .DS_Store

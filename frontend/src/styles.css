@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: light;
   --bg: #f3efe6;
   --bg-deep: #e7e0d3;
@@ -26,8 +26,32 @@ body {
 }
 
 button,
-textarea {
+textarea,
+input,
+select {
   font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), #e08d4a);
+  color: white;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(29, 36, 51, 0.1);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  outline: none;
 }
 
 .page-shell {
@@ -58,7 +82,7 @@ textarea {
 }
 
 .layout {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1320px, calc(100% - 32px));
   margin: 0 auto;
   padding: 40px 0 48px;
   position: relative;
@@ -110,13 +134,11 @@ textarea {
 }
 
 .composer textarea {
-  width: 100%;
   min-height: 160px;
-  border: 0;
   resize: vertical;
   background: transparent;
-  color: var(--text);
-  outline: none;
+  border: 0;
+  padding: 0;
 }
 
 .composer-footer {
@@ -127,21 +149,15 @@ textarea {
   color: var(--muted);
 }
 
-.composer button {
-  border: 0;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), #e08d4a);
-  color: white;
-  padding: 12px 18px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .content-grid {
   display: grid;
-  grid-template-columns: 0.92fr 1.08fr;
   gap: 24px;
   margin-top: 24px;
+}
+
+.expanded-grid {
+  grid-template-columns: 0.9fr 1fr 0.82fr;
+  align-items: start;
 }
 
 .panel {
@@ -180,7 +196,9 @@ textarea {
   margin-bottom: 8px;
 }
 
-.chat-bubble p {
+.chat-bubble p,
+.event-card p,
+.status-block p {
   margin: 8px 0 0;
   color: var(--muted);
 }
@@ -220,11 +238,6 @@ textarea {
   opacity: 0.72;
 }
 
-.event-card p {
-  margin: 6px 0 0;
-  color: var(--muted);
-}
-
 .event-dot {
   width: 12px;
   height: 12px;
@@ -260,14 +273,64 @@ textarea {
   letter-spacing: 0.1em;
 }
 
-@media (max-width: 900px) {
-  .hero-card,
-  .content-grid {
+.settings-panel {
+  min-height: 100%;
+}
+
+.settings-stack {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.settings-stack label {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-stack label span {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.checkbox-row {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  border: 1px solid rgba(29, 36, 51, 0.1);
+}
+
+.status-block {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(29, 36, 51, 0.06);
+}
+
+@media (max-width: 1100px) {
+  .expanded-grid,
+  .hero-card {
     grid-template-columns: 1fr;
   }
+}
 
+@media (max-width: 900px) {
   .layout {
-    width: min(100% - 20px, 1180px);
+    width: min(100% - 20px, 1320px);
     padding-top: 20px;
   }
 
@@ -281,7 +344,8 @@ textarea {
     font-size: 2.6rem;
   }
 
-  .composer-footer {
+  .composer-footer,
+  .settings-actions {
     flex-direction: column;
     align-items: stretch;
   }
