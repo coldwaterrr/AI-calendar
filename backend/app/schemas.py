@@ -46,6 +46,7 @@ class ParseRequest(BaseModel):
 class ParseResponse(BaseModel):
     message: str
     event: Event
+    parser_mode: Literal['rule_based', 'llm']
 
 
 class ModelConfigUpdate(BaseModel):

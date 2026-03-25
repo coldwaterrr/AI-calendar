@@ -31,6 +31,12 @@ type TestResult = {
   message: string;
 };
 
+type ParseResult = {
+  event: EventItem;
+  message: string;
+  parser_mode: "rule_based" | "llm";
+};
+
 const API_BASE = "http://127.0.0.1:8000";
 
 const providerOptions: Provider[] = ["openai", "anthropic", "gemini", "ollama", "custom"];
@@ -97,9 +103,10 @@ export function App() {
         },
         body: JSON.stringify({ text: input }),
       });
-      const data = (await response.json()) as { event: EventItem; message: string };
+      const data = (await response.json()) as ParseResult;
       setEvents((current) => [data.event, ...current]);
-      setStatus(data.message);
+      const modeLabel = data.parser_mode === "llm" ? "LLM 解析" : "规则回退";
+      setStatus(`${modeLabel}：${data.message}`);
     } catch {
       setStatus("未连接到后端，已保留输入内容");
     }

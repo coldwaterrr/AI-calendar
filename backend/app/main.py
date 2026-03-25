@@ -7,9 +7,16 @@ from sqlalchemy.orm import Session
 
 from . import models  # noqa: F401
 from .db import SessionLocal, engine, get_db
-from .llm import run_model_config_test
-from .parser import infer_event
-from .repository import create_event, get_model_config, list_events, seed_events, upsert_model_config
+from .llm import infer_event_with_llm, run_model_config_test
+from .parser import infer_event_rule_based
+from .repository import (
+    create_event,
+    get_model_config,
+    get_model_config_secret,
+    list_events,
+    seed_events,
+    upsert_model_config,
+)
 from .schemas import (
     Event,
     EventCreate,
@@ -40,7 +47,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title='AI Calendar API',
     description='MVP backend for an AI-powered memory and planning assistant.',
-    version='0.5.0',
+    version='0.6.1',
     lifespan=lifespan,
 )
 
@@ -72,11 +79,33 @@ def post_event(payload: EventCreate, db: Session = Depends(get_db)) -> Event:
 
 @app.post('/api/parse', response_model=ParseResponse)
 def parse_event(payload: ParseRequest, db: Session = Depends(get_db)) -> ParseResponse:
-    inferred = infer_event(payload.text)
+    config_secret = get_model_config_secret(db)
+
+    if config_secret is None:
+        inferred = infer_event_rule_based(payload.text)
+        parser_mode = 'rule_based'
+        message = 'No active model config was found, so fallback rules were used.'
+    else:
+        try:
+            inferred = infer_event_with_llm(
+                provider=config_secret['provider'],
+                model=config_secret['model'],
+                api_key=config_secret['api_key'],
+                base_url=config_secret['base_url'],
+                text=payload.text,
+            )
+            parser_mode = 'llm'
+            message = 'Parsed with the configured model and saved to the event timeline.'
+        except Exception:
+            inferred = infer_event_rule_based(payload.text)
+            parser_mode = 'rule_based'
+            message = 'Model parsing failed, so fallback rules were used and the event was saved.'
+
     event = create_event(db, inferred)
     return ParseResponse(
-        message='Parsed successfully and saved to the event timeline.',
+        message=message,
         event=event,
+        parser_mode=parser_mode,
     )
 
 

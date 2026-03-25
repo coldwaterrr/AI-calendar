@@ -93,6 +93,19 @@ def get_model_config(db: Session) -> ModelConfig | None:
     )
 
 
+def get_model_config_secret(db: Session) -> dict[str, str] | None:
+    record = db.scalar(select(ModelConfigRecord).order_by(ModelConfigRecord.updated_at.desc()))
+    if record is None or not record.is_active:
+        return None
+
+    return {
+        'provider': record.provider,
+        'model': record.model,
+        'base_url': record.base_url,
+        'api_key': decrypt_value(record.encrypted_api_key),
+    }
+
+
 def upsert_model_config(db: Session, payload: ModelConfigUpdate) -> ModelConfig:
     now = datetime.now(tz=timezone.utc)
     record = db.scalar(select(ModelConfigRecord).order_by(ModelConfigRecord.updated_at.desc()))
