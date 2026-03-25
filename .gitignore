@@ -1,4 +1,4 @@
-__pycache__/
+﻿__pycache__/
 *.pyc
 .pytest_cache/
 .venv/
@@ -9,6 +9,8 @@ dist/
 
 .env
 .env.*
+
+backend/ai_calendar.db
 
 .DS_Store
 Thumbs.db

@@ -1,17 +1,33 @@
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+﻿from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
-from .mock_data import MOCK_EVENTS
-from .schemas import Event, ParseRequest, ParseResponse
+from . import models  # noqa: F401
+from .db import Base, SessionLocal, engine, get_db
+from .parser import infer_event
+from .repository import create_event, list_events, seed_events
+from .schemas import Event, EventCreate, ParseRequest, ParseResponse
+
+
+def initialize_database() -> None:
+    Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        seed_events(db)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    initialize_database()
+    yield
 
 
 app = FastAPI(
     title="AI Calendar API",
     description="MVP backend for an AI-powered memory and planning assistant.",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -22,42 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def infer_event(text: str) -> Event:
-    now = datetime.now(tz=timezone.utc)
-    lowered = text.lower()
-
-    if "昨天" in text or "刚刚" in text or "today" in lowered:
-        tense = "past"
-        start_at = now - timedelta(hours=2)
-        end_at = now - timedelta(hours=1)
-    else:
-        tense = "future"
-        start_at = now + timedelta(days=1, hours=1)
-        end_at = start_at + timedelta(hours=1)
-
-    if "组会" in text or "会议" in text or "meeting" in lowered:
-        category = "meeting"
-        color = "#4B7BE5"
-    elif "运动" in text or "吃饭" in text or "跑步" in text:
-        category = "life"
-        color = "#3FAE6A"
-    else:
-        category = "research"
-        color = "#E45757"
-
-    return Event(
-        id=f"evt_{uuid4().hex[:8]}",
-        title=text[:18],
-        description="MVP 版本使用规则引擎生成，后续可替换为 LLM 结构化解析。",
-        start_at=start_at,
-        end_at=end_at,
-        tense=tense,
-        category=category,
-        color=color,
-        raw_input=text,
-        confidence=0.72,
-    )
+initialize_database()
 
 
 @app.get("/health")
@@ -66,14 +47,20 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/events", response_model=list[Event])
-def list_events() -> list[Event]:
-    return MOCK_EVENTS
+def get_events(db: Session = Depends(get_db)) -> list[Event]:
+    return list_events(db)
+
+
+@app.post("/api/events", response_model=Event)
+def post_event(payload: EventCreate, db: Session = Depends(get_db)) -> Event:
+    return create_event(db, payload)
 
 
 @app.post("/api/parse", response_model=ParseResponse)
-def parse_event(payload: ParseRequest) -> ParseResponse:
-    event = infer_event(payload.text)
+def parse_event(payload: ParseRequest, db: Session = Depends(get_db)) -> ParseResponse:
+    inferred = infer_event(payload.text)
+    event = create_event(db, inferred)
     return ParseResponse(
-        message="解析完成，MVP 已生成结构化事件。",
+        message="Parsed successfully and saved to the event timeline.",
         event=event,
     )
