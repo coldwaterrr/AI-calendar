@@ -2,4 +2,6 @@
 uvicorn[standard]==0.34.0
 pydantic==2.11.3
 sqlalchemy==2.0.40
+alembic==1.14.1
+psycopg[binary]==3.2.6
 cryptography==42.0.8

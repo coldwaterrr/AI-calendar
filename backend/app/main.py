@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from . import models  # noqa: F401
-from .db import Base, SessionLocal, engine, get_db
+from .db import SessionLocal, engine, get_db
 from .parser import infer_event
 from .repository import create_event, get_model_config, list_events, seed_events, upsert_model_config
 from .schemas import (
@@ -22,7 +23,10 @@ from .schemas import (
 
 
 def initialize_database() -> None:
-    Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
+    if not inspector.has_table('events') or not inspector.has_table('model_configs'):
+        return
+
     with SessionLocal() as db:
         seed_events(db)
 
@@ -36,7 +40,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title='AI Calendar API',
     description='MVP backend for an AI-powered memory and planning assistant.',
-    version='0.3.0',
+    version='0.4.0',
     lifespan=lifespan,
 )
 
