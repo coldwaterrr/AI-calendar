@@ -13,6 +13,8 @@
 - FastAPI 服务入口
 - SQLite 数据库与事件表
 - Alembic 迁移目录与初始 migration
+- PostgreSQL Docker Compose 模板
+- PostgreSQL 连通性验证脚本
 - BYOK 配置模型与接口
 - 简化版自然语言解析接口
 - React 首页骨架
@@ -30,27 +32,52 @@
 
 ## 4. 数据库迁移
 
+### SQLite
+
 ```bash
 cd backend
 alembic -c alembic.ini upgrade head
 ```
 
-如果需要切换 PostgreSQL，可先设置环境变量：
+### PostgreSQL
+
+1. 确保 Docker Desktop 已启动。
+
+2. 启动数据库：
 
 ```bash
-set DATABASE_URL=postgresql+psycopg://user:password@host:5432/ai_calendar
-alembic -c alembic.ini upgrade head
+docker compose up -d postgres
 ```
 
-## 5. 建议下一步开发顺序
+3. 设置环境变量：
 
-1. 接入真实 PostgreSQL，验证 Alembic 迁移和应用启动
+```bash
+set DATABASE_URL=postgresql+psycopg://ai_calendar:ai_calendar_dev@127.0.0.1:5432/ai_calendar
+```
+
+4. 跑迁移并验证：
+
+```bash
+cd backend
+alembic -c alembic.ini upgrade head
+python scripts/verify_postgres.py
+```
+
+## 5. 当前验证结果
+
+- Alembic 已在 SQLite 干净库上验证通过
+- Docker CLI 可用
+- 当前环境的 Docker daemon 未启动，因此尚未完成真实 PostgreSQL 容器验证
+
+## 6. 建议下一步开发顺序
+
+1. 启动 Docker Desktop 后完成 PostgreSQL 实例验证
 2. 将规则解析替换为 LiteLLM 结构化输出
 3. 将模型测试接口接到真实供应商请求
 4. 接入语音转写链路
 5. 增加事件编辑、删除和筛选能力
 
-## 6. 本地启动方式
+## 7. 本地启动方式
 
 ### 后端
 

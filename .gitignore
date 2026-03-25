@@ -9,6 +9,7 @@ dist/
 
 .env
 .env.*
+!backend/.env.example
 backend/.secrets/
 backend/ai_calendar.db
 backend/alembic/__pycache__/

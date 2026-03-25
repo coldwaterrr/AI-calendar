@@ -16,9 +16,12 @@ def get_database_url() -> str:
     return os.getenv('DATABASE_URL', DEFAULT_DATABASE_URL)
 
 
-connect_args = {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
+def is_sqlite(url: str) -> bool:
+    return url.startswith('sqlite')
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+connect_args = {'check_same_thread': False} if is_sqlite(DATABASE_URL) else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
