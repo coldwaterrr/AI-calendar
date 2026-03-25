@@ -13,7 +13,7 @@ type EventItem = {
   confidence: number;
 };
 
-type Provider = "openai" | "anthropic" | "gemini" | "ollama" | "custom";
+type Provider = "openai" | "anthropic" | "gemini" | "ollama" | "openrouter" | "custom";
 
 type ModelConfig = {
   provider: Provider;
@@ -39,7 +39,7 @@ type ParseResult = {
 
 const API_BASE = "http://127.0.0.1:8000";
 
-const providerOptions: Provider[] = ["openai", "anthropic", "gemini", "ollama", "custom"];
+const providerOptions: Provider[] = ["openai", "anthropic", "gemini", "ollama", "openrouter", "custom"];
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -151,6 +151,9 @@ export function App() {
 
   const pastEvents = events.filter((event) => event.tense === "past");
   const futureEvents = events.filter((event) => event.tense === "future");
+  const baseUrlPlaceholder = configForm.provider === "openrouter"
+    ? "https://openrouter.ai/api/v1"
+    : "https://api.openai.com/v1";
 
   return (
     <div className="page-shell">
@@ -239,7 +242,7 @@ export function App() {
           <article className="glass-card panel settings-panel">
             <div className="panel-header">
               <h2>BYOK 设置</h2>
-              <p>配置 OpenAI、Gemini、Anthropic、Ollama 或自定义接口</p>
+              <p>配置 OpenAI、OpenRouter、Gemini、Anthropic、Ollama 或自定义接口</p>
             </div>
 
             <div className="settings-stack">
@@ -251,6 +254,10 @@ export function App() {
                     setConfigForm((current) => ({
                       ...current,
                       provider: event.target.value as Provider,
+                      base_url:
+                        event.target.value === 'openrouter'
+                          ? 'https://openrouter.ai/api/v1'
+                          : current.base_url,
                     }))
                   }
                 >
@@ -269,7 +276,7 @@ export function App() {
                   onChange={(event) =>
                     setConfigForm((current) => ({ ...current, model: event.target.value }))
                   }
-                  placeholder="gpt-4o-mini"
+                  placeholder={configForm.provider === 'openrouter' ? 'stepfun/step-3.5-flash:free' : 'gpt-4o-mini'}
                 />
               </label>
 
@@ -280,7 +287,7 @@ export function App() {
                   onChange={(event) =>
                     setConfigForm((current) => ({ ...current, base_url: event.target.value }))
                   }
-                  placeholder="https://api.openai.com/v1"
+                  placeholder={baseUrlPlaceholder}
                 />
               </label>
 

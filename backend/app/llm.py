@@ -2,7 +2,7 @@
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import litellm
@@ -16,6 +16,7 @@ PROVIDER_PREFIXES: dict[ModelProvider, str] = {
     'anthropic': 'anthropic',
     'gemini': 'gemini',
     'ollama': 'ollama',
+    'openrouter': 'openrouter',
     'custom': 'openai',
 }
 
@@ -24,6 +25,7 @@ ENV_KEY_BY_PROVIDER: dict[ModelProvider, str] = {
     'anthropic': 'ANTHROPIC_API_KEY',
     'gemini': 'GEMINI_API_KEY',
     'ollama': 'OPENAI_API_KEY',
+    'openrouter': 'OPENROUTER_API_KEY',
     'custom': 'OPENAI_API_KEY',
 }
 
@@ -32,6 +34,7 @@ ENV_BASE_BY_PROVIDER: dict[ModelProvider, str] = {
     'anthropic': 'ANTHROPIC_API_BASE',
     'gemini': 'GEMINI_API_BASE',
     'ollama': 'OPENAI_API_BASE',
+    'openrouter': 'OPENROUTER_API_BASE',
     'custom': 'OPENAI_API_BASE',
 }
 
@@ -40,6 +43,12 @@ CATEGORY_COLORS = {
     'meeting': '#4B7BE5',
     'life': '#3FAE6A',
 }
+
+
+def _normalize_provider(provider: ModelProvider, base_url: str) -> ModelProvider:
+    if provider == 'custom' and 'openrouter.ai' in base_url:
+        return 'openrouter'
+    return provider
 
 
 @contextmanager
@@ -60,27 +69,34 @@ def temporary_env(var_map: dict[str, str | None]):
                 os.environ[key] = value
 
 
-def build_litellm_model_name(provider: ModelProvider, model: str) -> str:
-    prefix = PROVIDER_PREFIXES[provider]
-    return model if '/' in model else f'{prefix}/{model}'
+def build_litellm_model_name(provider: ModelProvider, model: str, base_url: str = '') -> str:
+    normalized_provider = _normalize_provider(provider, base_url)
+    prefix = PROVIDER_PREFIXES[normalized_provider]
+    if normalized_provider == 'openrouter' and model.startswith('openrouter/'):
+        return model
+    if normalized_provider != 'openrouter' and '/' in model:
+        return model
+    return f'{prefix}/{model}'
 
 
 def _env_values(provider: ModelProvider, api_key: str, base_url: str) -> dict[str, str | None]:
+    normalized_provider = _normalize_provider(provider, base_url)
     return {
-        ENV_KEY_BY_PROVIDER[provider]: api_key,
-        ENV_BASE_BY_PROVIDER[provider]: base_url.strip() or None,
+        ENV_KEY_BY_PROVIDER[normalized_provider]: api_key,
+        ENV_BASE_BY_PROVIDER[normalized_provider]: base_url.strip() or None,
     }
 
 
 def run_model_config_test(payload: ModelConfigTestRequest) -> tuple[bool, int, str]:
-    if payload.provider in {'ollama', 'custom'} and not payload.base_url.strip():
+    normalized_provider = _normalize_provider(payload.provider, payload.base_url)
+    if normalized_provider in {'ollama', 'custom'} and not payload.base_url.strip():
         return False, 0, 'Base URL is required for ollama or custom providers.'
 
     started = time.perf_counter()
     try:
         with temporary_env(_env_values(payload.provider, payload.api_key, payload.base_url)):
             response = completion(
-                model=build_litellm_model_name(payload.provider, payload.model),
+                model=build_litellm_model_name(payload.provider, payload.model, payload.base_url),
                 messages=[{'role': 'user', 'content': 'Reply with exactly: pong'}],
                 api_base=payload.base_url.strip() or None,
                 max_tokens=8,
@@ -115,19 +131,10 @@ def infer_event_with_llm(
     text: str,
 ) -> EventCreate:
     now = datetime.now(tz=timezone.utc)
-    schema_hint = {
-        'title': 'short event title',
-        'description': 'details',
-        'start_at': 'ISO8601 datetime',
-        'end_at': 'ISO8601 datetime',
-        'tense': 'past or future',
-        'category': 'research or life or meeting',
-        'confidence': 0.9,
-    }
     prompt = (
         'Extract one calendar event from the user input. '
         'Return strict JSON only with keys: '
-        f"{', '.join(schema_hint.keys())}. "
+        'title, description, start_at, end_at, tense, category, confidence. '
         f'Current time (UTC): {now.isoformat()}. '
         'Use ISO 8601 timestamps with timezone. '
         'If time is vague, infer a reasonable 1-hour duration. '
@@ -137,7 +144,7 @@ def infer_event_with_llm(
 
     with temporary_env(_env_values(provider, api_key, base_url)):
         response = completion(
-            model=build_litellm_model_name(provider, model),
+            model=build_litellm_model_name(provider, model, base_url),
             messages=[{'role': 'user', 'content': prompt}],
             api_base=base_url.strip() or None,
             response_format={'type': 'json_object'},

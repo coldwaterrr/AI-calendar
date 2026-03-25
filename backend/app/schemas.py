@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 EventTense = Literal['past', 'future']
 EventCategory = Literal['research', 'life', 'meeting']
-ModelProvider = Literal['openai', 'anthropic', 'gemini', 'ollama', 'custom']
+ModelProvider = Literal['openai', 'anthropic', 'gemini', 'ollama', 'openrouter', 'custom']
 
 
 class Event(BaseModel):
