@@ -78,3 +78,25 @@ class ModelConfigTestResponse(BaseModel):
     success: bool
     latency_ms: int
     message: str
+
+
+class EventUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    tense: EventTense | None = None
+    category: EventCategory | None = None
+    color: str | None = None
+
+
+class SummaryRequest(BaseModel):
+    days: int = Field(default=7, ge=1, le=365)
+
+
+class SummaryResponse(BaseModel):
+    summary_text: str
+    event_count: int
+    period_start: str
+    period_end: str
+    parser_mode: Literal['llm', 'fallback']

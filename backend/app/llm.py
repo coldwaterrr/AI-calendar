@@ -8,7 +8,7 @@ from uuid import uuid4
 import litellm
 from litellm import completion
 
-from .schemas import EventCreate, ModelConfigTestRequest, ModelProvider
+from .schemas import Event, EventCreate, ModelConfigTestRequest, ModelProvider
 
 
 PROVIDER_PREFIXES: dict[ModelProvider, str] = {
@@ -169,3 +169,61 @@ def infer_event_with_llm(
         raw_input=text,
         confidence=float(data.get('confidence', 0.85)),
     )
+
+
+def generate_summary(
+    *,
+    events: list[Event],
+    days: int,
+    provider: ModelProvider | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> tuple[str, str]:
+    """Generate an AI summary of past events. Returns (summary_text, parser_mode)."""
+    now = datetime.now(tz=timezone.utc)
+    event_lines = []
+    for e in events:
+        start_str = e.start_at.strftime('%Y-%m-%d %H:%M')
+        event_lines.append(
+            f'- [{start_str}] {e.title} | {e.category} | {e.description}'
+        )
+    event_text = '\n'.join(event_lines) if event_lines else 'No events recorded.'
+
+    now_str = now.strftime('%Y-%m-%d %H:%M')
+    day_label = 'today' if days == 1 else f'the last {days} days'
+
+    prompt = (
+        f"今天是 {now_str}。用户在过去 {day_label} 的事件记录如下：\n\n{event_text}\n\n"
+        "请用中文生成一段简洁的总结，涵盖用户在这段时间内的主要活动、投入的领域和大致节奏。"
+        '要求 3-5 句话，语气自然友好，适合个人回顾。只返回总结文本，不要 JSON 或其他格式。'
+    )
+
+    if provider and model and api_key is not None:
+        with temporary_env(
+            _env_values(provider, api_key, base_url or '')
+        ):
+            response = completion(
+                model=build_litellm_model_name(provider, model, base_url or ''),
+                messages=[{'role': 'user', 'content': prompt}],
+                api_base=(base_url or '').strip() or None,
+                max_tokens=300,
+                temperature=0.3,
+            )
+        summary = response.choices[0].message.content.strip() if response.choices else _fallback_summary(events, days)
+        return summary, 'llm'
+    else:
+        return _fallback_summary(events, days), 'fallback'
+
+
+def _fallback_summary(events: list[Event], days: int) -> str:
+    if not events:
+        return f'过去 {days} 天内暂无记录。试试用自然语言记录一下吧！'
+    by_cat: dict[str, int] = {}
+    for e in events:
+        by_cat[e.category] = by_cat.get(e.category, 0) + 1
+    parts = [f'过去 {days} 天共记录 {len(events)} 件事']
+    cat_names = {'research': '研究开发', 'meeting': '会议', 'life': '生活'}
+    for cat, count in sorted(by_cat.items(), key=lambda x: -x[1]):
+        parts.append(f'{cat_names.get(cat, cat)} {count} 件')
+    return '，'.join(parts) + '。'

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import EventRecord, ModelConfigRecord
-from .schemas import Event, EventCreate, ModelConfig, ModelConfigUpdate
+from .schemas import Event, EventCreate, EventUpdate, ModelConfig, ModelConfigUpdate
 from .security import decrypt_value, encrypt_value, mask_secret
 
 
@@ -15,6 +15,35 @@ def _to_event_schema(record: EventRecord) -> Event:
 def list_events(db: Session) -> list[Event]:
     records = db.scalars(select(EventRecord).order_by(EventRecord.start_at.desc())).all()
     return [_to_event_schema(record) for record in records]
+
+
+def list_past_events(db: Session, start: datetime, end: datetime) -> list[Event]:
+    records = db.scalars(
+        select(EventRecord)
+        .where(EventRecord.tense == 'past', EventRecord.start_at >= start, EventRecord.start_at < end)
+        .order_by(EventRecord.start_at.desc())
+    ).all()
+    return [_to_event_schema(r) for r in records]
+
+
+def update_event(db: Session, event_id: str, payload: EventUpdate) -> Event | None:
+    record = db.get(EventRecord, event_id)
+    if record is None:
+        return None
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(record, field, value)
+    db.commit()
+    db.refresh(record)
+    return _to_event_schema(record)
+
+
+def delete_event(db: Session, event_id: str) -> bool:
+    record = db.get(EventRecord, event_id)
+    if record is None:
+        return False
+    db.delete(record)
+    db.commit()
+    return True
 
 
 def create_event(db: Session, payload: EventCreate) -> Event:

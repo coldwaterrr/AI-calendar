@@ -7,25 +7,31 @@ from sqlalchemy.orm import Session
 
 from . import models  # noqa: F401
 from .db import SessionLocal, engine, get_db
-from .llm import infer_event_with_llm, run_model_config_test
+from .llm import generate_summary, infer_event_with_llm, run_model_config_test
 from .parser import infer_event_rule_based
 from .repository import (
     create_event,
+    delete_event,
     get_model_config,
     get_model_config_secret,
     list_events,
+    list_past_events,
     seed_events,
+    update_event,
     upsert_model_config,
 )
 from .schemas import (
     Event,
     EventCreate,
+    EventUpdate,
     ModelConfig,
     ModelConfigTestRequest,
     ModelConfigTestResponse,
     ModelConfigUpdate,
     ParseRequest,
     ParseResponse,
+    SummaryRequest,
+    SummaryResponse,
 )
 
 
@@ -130,3 +136,48 @@ def test_model_config(payload: ModelConfigTestRequest) -> ModelConfigTestRespons
         latency_ms=latency_ms,
         message=message,
     )
+
+
+@app.post('/api/summary', response_model=SummaryResponse)
+def summarize_events(payload: SummaryRequest, db: Session = Depends(get_db)) -> SummaryResponse:
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(tz=timezone.utc)
+    start = now - timedelta(days=payload.days)
+    events = list_past_events(db, start, now)
+    config = get_model_config_secret(db)
+
+    if config:
+        summary_text, mode = generate_summary(
+            events=events,
+            days=payload.days,
+            provider=config['provider'],  # type: ignore[arg-type]
+            model=config['model'],
+            api_key=config['api_key'],
+            base_url=config['base_url'],
+        )
+    else:
+        summary_text, mode = generate_summary(events=events, days=payload.days)
+
+    return SummaryResponse(
+        summary_text=summary_text,
+        event_count=len(events),
+        period_start=start.isoformat(),
+        period_end=now.isoformat(),
+        parser_mode=mode,  # type: ignore[arg-type]
+    )
+
+
+@app.put('/api/events/{event_id}', response_model=Event)
+def put_event(event_id: str, payload: EventUpdate, db: Session = Depends(get_db)) -> Event:
+    result = update_event(db, event_id, payload)
+    if result is None:
+        raise HTTPException(status_code=404, detail='Event not found.')
+    return result
+
+
+@app.delete('/api/events/{event_id}')
+def delete_event_endpoint(event_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    ok = delete_event(db, event_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Event not found.')
+    return {'message': 'Event deleted.'}
